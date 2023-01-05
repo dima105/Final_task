@@ -1,77 +1,143 @@
-const form = document.querySelector(".top-banner form");
-const input = document.querySelector(".top-banner input");
-const msg = document.querySelector(".top-banner .msg");
-const list = document.querySelector(".ajax-section .cities");
-const apiKey = "abe4516085c2758d6d6db24ee1532064";
+$(document).ready(function (){
+  let localCities = JSON.parse(localStorage.getItem("cities")) || []
+  let cities = [];
 
-form.addEventListener("submit", e => {
-  e.preventDefault();
-  let inputVal = input.value;
+  function cityAllStorage (){
 
-  const listItems = list.querySelectorAll(".ajax-section .city");
-  const listItemsArray = Array.from(listItems);
-
-  if (listItemsArray.length > 0) {
-    const filteredArray = listItemsArray.filter(el => {
-      let content = "";
-      if (inputVal.includes(",")) {
-        if (inputVal.split(",")[1].length > 2) {
-          inputVal = inputVal.split(",")[0];
-          content = el
-            .querySelector(".city-name span")
-            .textContent.toLowerCase();
-        } else {
-          content = el.querySelector(".city-name").dataset.name.toLowerCase();
-        }
-      } else {
-        content = el.querySelector(".city-name span").textContent.toLowerCase();
+      for (i=0; i<localCities.length; i++){
+          $(".city-list").prepend("<button type='button' class='btn btn-light prev-city'>"+ localCities[i]+ "</button>");
       }
-      return content == inputVal.toLowerCase();
-    });
+      
+  }
+  console.log(localStorage.getItem("cities"));
+  cityAllStorage();
 
-    if (filteredArray.length > 0) {
-      msg.textContent = `You already know the weather for ${
-        filteredArray[0].querySelector(".city-name span").textContent
-      } ...otherwise be more specific by providing the country code as well 😉`;
-      form.reset();
-      input.focus();
-      return;
-    }
+  $(".remove").on("click", function (){
+      localStorage.clear();
+      $(".prev-city").remove();
+  });
+
+  let today = function timeStamp (){
+      $('#currentDay').text(`${moment().format('MMMM Do YYYY, h:mm a')}`);
+      };
+      today();
+      setInterval(today, 1000);
+
+  $(".myClass").on('click', function (event){
+      event.preventDefault();
+
+      let city= $("#search").val().trim();
+      cities = city.split(",");
+      localCities.push(city)
+      
+      if (city != ''){
+          $.ajax({
+              url: `https://api.openweathermap.org/data/2.5/weather?q=${city}&units=imperial&APPID=50f9be4cd5ddca3502184f3307bce83e`,
+              type: "GET",
+              datatype: "jsonp",
+              success: function(data){
+                  let widget = show (data);
+                  const lon = data.coord.lon;
+                  const lat = data.coord.lat;
+                  var uvIndexValue = uvIndexFunction(lat, lon);
+                  $(".showUvResults").html(uvIndexValue)
+                  $("#showResults").html(widget);
+                  $("#search").val('')
+              }  
+          })
+          localStorage.setItem("cities", JSON.stringify(localCities));
+          $(".city-list").append("<button class='btn btn-light prev-city'>"+ cities + "</button>")
+          fiveDayForecast (city);
+      }else{
+          $('#error').html (alert('Field cannot be empty'))
+      }   
+  });
+
+  function uvIndexFunction(lat, lon) {
+
+      var queryURLData = `https://api.openweathermap.org/data/2.5/onecall?lat=${lat}&lon=${lon}&exlclude={part}&APPID=50f9be4cd5ddca3502184f3307bce83e`
+      $.ajax({
+          url: queryURLData,
+          method: "GET"
+      }).then(function (data) {
+          let uvIndex = data.current.uvi;
+         
+          let $uvIndex = $("<button class= 'btn btnUvResults'>");
+          $uvIndex.addClass("card-text uvIndex");
+          $(".showUvResults").append($uvIndex);
+         
+          if (uvIndex > 0.01 & uvIndex < 3) {
+             
+              $uvIndex.addClass('success-color').css("background-color", "green").text(`Low Danger  + ${uvIndex}`);
+          } else if (uvIndex > 3 & uvIndex < 6) {
+              
+              $uvIndex.addClass('yellow accent-1').css("background-color", "yellow").text(`Moderate to High Danger  ${uvIndex}`);
+          } else if (uvIndex > 6 & uvIndex < 8) {
+             
+              $uvIndex.addClass('warning-color').css("background-color", "orange").text(`Moderate to High Danger  ${uvIndex}`);
+          } else if (uvIndex > 8 & uvIndex < 11) {
+              
+              $uvIndex.addClass('danger-color').css("background-color", "red").text(`Very High to Extreme Danger  ${uvIndex}`);
+          } else if (uvIndex > 11) {
+            
+              $uvIndex.addClass('secondary-color').text(`UV Index: Very High to Extreme Danger  ${uvIndex}`);
+          } else {
+              $uvIndex.addClass('notAvailable-color').css("background-color", "blue").text(`N/A`);
+          }
+          return uvIndex;
+      });
   }
 
-  const url = `https://api.openweathermap.org/data/2.5/weather?q=${inputVal}&appid=${apiKey}&units=metric`;
+  function show(data) {
+      return  "<div id='summary'>" +"<h3 style= 'font-size: 20px; font-weight: bold;'>"+ data.name +"," + data.sys.country +"</h3>" +
+              "<h3><img src=https://openweathermap.org/img/wn/"+ data.weather[0].icon+".png> "+ data.weather[0].description  +"</h3>" + 
+              "<h3><strong>Weather</strong>: "+ data.weather[0].main  +"</h3>" +
+              "<h3><strong>Temperature</strong>: "+ Math.floor(data.main.temp)  +"&deg;F</h3>" +
+              "<h3><strong>Min. Temp</strong>: "+ Math.floor(data.main.temp_min)  +"&deg;F</h3>" +
+              "<h3><strong>Max. Temp</strong>: "+ Math.floor(data.main.temp_max)  +"&deg;F</h3>" +
+              "<h3><strong>Wind Speed</strong>: "+ Math.floor(data.wind.speed)  +" MPH" +"</h3>" +
+              "<h3><strong>Humidity</strong>: "+ data.main.humidity+"%" +"</h3>" + 
+              "<h3 class='showUvResults'><strong>UV-Index</strong>: </h3>" + "</div>";       
+  }
 
-  fetch(url)
-    .then(response => response.json())
-    .then(data => {
-      const { main, name, sys, weather } = data;
-      const icon = `https://s3-us-west-2.amazonaws.com/s.cdpn.io/162656/${
-        weather[0]["icon"]
-      }.svg`;
+  function fiveDayForecast (city) {
+      $.ajax ({
+          url: `https://api.openweathermap.org/data/2.5/forecast?q=${city}&units=imperial&appid=50f9be4cd5ddca3502184f3307bce83e`,
+          type: "GET",
+          datatype: "jsonp",
+          success: function getForecast(data){
+              $("#showFiveDayForecast").html("");
+              console.log(data)
+              
+              for (i=0; i<data.list.length; i++) {
+                  
+                  if(data.list[i].dt_txt.indexOf("15:00:00")>0){
+                  
+                          let weatherData= data.list[i]
+                          let widgetFiveDay = showForecastData(weatherData);
+                          
+                          $("#showFiveDayForecast").append(widgetFiveDay);
+                  }
+              } 
+          }  
+  })
 
-      const li = document.createElement("li");
-      li.classList.add("city");
-      const markup = `
-        <h2 class="city-name" data-name="${name},${sys.country}">
-          <span>${name}</span>
-          <sup>${sys.country}</sup>
-        </h2>
-        <div class="city-temp">${Math.round(main.temp)}<sup>°C</sup></div>
-        <figure>
-          <img class="city-icon" src="${icon}" alt="${
-        weather[0]["description"]
-      }">
-          <figcaption>${weather[0]["description"]}</figcaption>
-        </figure>
-      `;
-      li.innerHTML = markup;
-      list.appendChild(li);
-    })
-    .catch(() => {
-      msg.textContent = "Please search for a valid city 😩";
-    });
+  function showForecastData (data){
+      
+      return  "<div class='fiveDayFinal'> <h3 class='dateFive'>" + moment(data.dt_txt).format("LL")+ "</h3>" +
+              "<h3><img src=http://openweathermap.org/img/wn/"+ data.weather[0].icon+".png id='img2'> "+ data.weather[0].description  +"</h3>" + 
+              "<h3><strong>Weather</strong>: "+ data.weather[0].main  +"</h3>" +
+              "<h3><strong>Temperature</strong>: "+ Math.floor(data.main.temp)  +"&deg;F</h3>" +
+              "<h3><strong>Wind Speed</strong>: "+ Math.floor(data.wind.speed)  +" MPH" +"</h3>" +
+              "<h3><strong>Humidity</strong>: "+ data.main.humidity+"%" +"</h3>"+ "</div>";
+      };
+  }
 
-  msg.textContent = "";
-  form.reset();
-  input.focus();
+$(document).on("click",".prev-city", function(){
+  let city = $(this).text();
+  $(".inpSearch").val(city);
+  $("#searchButton").click();
+  $(this).remove();
 });
+
+})
